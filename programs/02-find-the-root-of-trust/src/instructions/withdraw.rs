@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use anchor_lang::solana_program::ed25519_program;
 use anchor_lang::solana_program::sysvar::instructions::{
     self as ix_sysvar, load_current_index_checked,
 };
@@ -14,12 +15,12 @@ pub struct Withdraw<'info> {
     pub config: Account<'info, Config>,
     #[account(address = config.mint)]
     pub mint: Account<'info, Mint>,
-    #[account(mut, seeds = [b"vault"], bump)]
+    #[account(mut, seeds = [b"vault"], bump, token::mint = mint, token::authority = config)]
     pub vault: Account<'info, TokenAccount>,
     #[account(mut, token::mint = mint)]
     pub recipient_tokens: Account<'info, TokenAccount>,
     /// CHECK: verified against the canonical Instructions sysvar address before reading.
-    #[account(address = ix_sysvar::ID)]
+    #[account(address = ix_sysvar::ID @ VaultError::InvalidInstructionsSysvar)]
     pub instructions: UncheckedAccount<'info>,
     pub token_program: Program<'info, Token>,
 }
@@ -34,10 +35,23 @@ pub fn withdrawal_message(vault: &Pubkey, recipient_tokens: &Pubkey, amount: u64
 }
 
 pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
+    // Anchor the instructions sysvar to its canonical runtime address before reading anything.
+    require_keys_eq!(
+        ctx.accounts.instructions.key(),
+        ix_sysvar::ID,
+        VaultError::InvalidInstructionsSysvar
+    );
+
     let current_ix = load_current_index_checked(&ctx.accounts.instructions)? as usize;
     require!(current_ix > 0, VaultError::NotEd25519);
 
     let signature_check = load_instruction_unchecked(current_ix - 1, &ctx.accounts.instructions)?;
+    require_keys_eq!(
+        signature_check.program_id,
+        ed25519_program::ID,
+        VaultError::NotEd25519
+    );
+
     let signed = parse_ed25519(&signature_check)?;
     require!(
         ctx.accounts.config.allowed_keys.contains(&signed.pubkey),

@@ -8,6 +8,8 @@ pub enum VaultError {
     TooManyKeys,
     #[msg("The instruction before this one is not an Ed25519 signature check")]
     NotEd25519,
+    #[msg("The instructions account is not the canonical instructions sysvar")]
+    InvalidInstructionsSysvar,
     #[msg("The instructions account has an unexpected layout")]
     MalformedSysvar,
     #[msg("The Ed25519 instruction has an unexpected layout")]

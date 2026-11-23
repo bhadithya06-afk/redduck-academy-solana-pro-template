@@ -122,7 +122,7 @@ describe("02-find-the-root-of-trust", () => {
       .instruction();
 
     await expectReverted(
-      { revertedWith: { message: "ConstraintAddress" } },
+      { revertedWith: { message: "InvalidInstructionsSysvar" } },
       sendIxs(env.context, [env.payer], ix),
     );
   });

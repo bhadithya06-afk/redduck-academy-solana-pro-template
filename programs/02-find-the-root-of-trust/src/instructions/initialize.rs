@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Mint, Token, TokenAccount};
 
-use crate::Config;
+use crate::{Config, VaultError, MAX_KEYS};
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {
@@ -23,11 +23,13 @@ pub struct Initialize<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
+pub fn initialize(ctx: Context<Initialize>, allowed_keys: Vec<Pubkey>) -> Result<()> {
+    require!(allowed_keys.len() <= MAX_KEYS, VaultError::TooManyKeys);
     ctx.accounts.config.set_inner(Config {
         admin: ctx.accounts.admin.key(),
         mint: ctx.accounts.mint.key(),
         bump: ctx.bumps.config,
+        allowed_keys,
     });
     Ok(())
 }

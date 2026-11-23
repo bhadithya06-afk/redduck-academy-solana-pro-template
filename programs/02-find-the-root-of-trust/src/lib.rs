@@ -18,8 +18,8 @@ declare_id!("GfxMGdUbRtXDtG8fx2HGLoHhDjpa9syxZPvtefw7yksq");
 pub mod oracle_vault {
     use super::*;
 
-    pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
-        instructions::initialize(ctx)
+    pub fn initialize(ctx: Context<Initialize>, allowed_keys: Vec<Pubkey>) -> Result<()> {
+        instructions::initialize(ctx, allowed_keys)
     }
 
     pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {

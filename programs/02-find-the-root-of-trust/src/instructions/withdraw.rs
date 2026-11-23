@@ -1,7 +1,10 @@
 use anchor_lang::prelude::*;
+use anchor_lang::solana_program::sysvar::instructions::{
+    self as ix_sysvar, load_current_index_checked,
+};
 use anchor_spl::token::{transfer_checked, Mint, Token, TokenAccount, TransferChecked};
 
-use crate::{load_instruction_unchecked, parse_ed25519, Allowlist, Config, VaultError};
+use crate::{load_instruction_unchecked, parse_ed25519, Config, VaultError};
 
 #[derive(Accounts)]
 pub struct Withdraw<'info> {
@@ -9,15 +12,14 @@ pub struct Withdraw<'info> {
     pub caller: Signer<'info>,
     #[account(seeds = [b"config"], bump = config.bump)]
     pub config: Account<'info, Config>,
-    /// The keys allowed to sign a withdrawal.
-    pub allowlist: Account<'info, Allowlist>,
     #[account(address = config.mint)]
     pub mint: Account<'info, Mint>,
     #[account(mut, seeds = [b"vault"], bump)]
     pub vault: Account<'info, TokenAccount>,
     #[account(mut, token::mint = mint)]
     pub recipient_tokens: Account<'info, TokenAccount>,
-    /// CHECK: the instructions sysvar, read to find the signature check that ran before us.
+    /// CHECK: verified against the canonical Instructions sysvar address before reading.
+    #[account(address = ix_sysvar::ID)]
     pub instructions: UncheckedAccount<'info>,
     pub token_program: Program<'info, Token>,
 }
@@ -32,10 +34,13 @@ pub fn withdrawal_message(vault: &Pubkey, recipient_tokens: &Pubkey, amount: u64
 }
 
 pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
-    let signature_check = load_instruction_unchecked(0, &ctx.accounts.instructions)?;
+    let current_ix = load_current_index_checked(&ctx.accounts.instructions)? as usize;
+    require!(current_ix > 0, VaultError::NotEd25519);
+
+    let signature_check = load_instruction_unchecked(current_ix - 1, &ctx.accounts.instructions)?;
     let signed = parse_ed25519(&signature_check)?;
     require!(
-        ctx.accounts.allowlist.keys.contains(&signed.pubkey),
+        ctx.accounts.config.allowed_keys.contains(&signed.pubkey),
         VaultError::KeyNotAllowed
     );
     let expected = withdrawal_message(

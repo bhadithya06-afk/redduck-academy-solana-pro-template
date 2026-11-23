@@ -12,4 +12,12 @@ pub enum RoundError {
     AlreadySettled,
     #[msg("The swap returned less than the minimum")]
     SlippageExceeded,
+    #[msg("Refund grace window has not elapsed yet")]
+    RefundTooEarly,
+    #[msg("No stake remaining to refund")]
+    NothingToRefund,
+    #[msg("Swap venue change delay has not elapsed yet")]
+    DexChangeNotReady,
+    #[msg("No pending swap venue change")]
+    NoPendingDexChange,
 }

@@ -3,7 +3,7 @@ use anchor_lang::solana_program::instruction::{AccountMeta, Instruction};
 use anchor_lang::solana_program::program::invoke;
 use anchor_spl::token::TokenAccount;
 
-use crate::{record_entry, Config, Entry, Round, RoundError, DEX_PROGRAM_ID};
+use crate::{record_entry, Config, Entry, Round, RoundError};
 
 #[derive(Accounts)]
 pub struct JoinWithSwap<'info> {
@@ -23,7 +23,8 @@ pub struct JoinWithSwap<'info> {
     pub entry: Account<'info, Entry>,
     #[account(mut, seeds = [b"vault"], bump)]
     pub vault: Account<'info, TokenAccount>,
-    #[account(address = DEX_PROGRAM_ID)]
+    /// CHECK: verified against the timelock-governed `config.dex_program`.
+    #[account(address = config.dex_program)]
     pub dex_program: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
 }

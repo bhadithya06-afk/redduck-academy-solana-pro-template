@@ -63,7 +63,7 @@ export const approve = async (
   await sendIxs(env.context, [member], ix);
 };
 
-/** Executes a proposal, passing the stored instruction's accounts and its program as remaining accounts. */
+/** Executes a proposal; any wallet may execute once approvals meet threshold. */
 export const execute = async (
   env: MultisigFixture,
   id: number,
@@ -81,10 +81,30 @@ export const execute = async (
   ];
   const ix = await env.program.methods
     .execute()
-    .accountsPartial({ admin: executor.publicKey, proposal: env.proposal(id) })
+    .accountsPartial({
+      executor: executor.publicKey,
+      proposal: env.proposal(id),
+    })
     .remainingAccounts(accounts)
     .instruction();
   await sendIxs(env.context, [executor], ix);
+};
+
+export const cancelProposal = async (
+  env: MultisigFixture,
+  id: number,
+  caller: Keypair,
+  destination: PublicKey = caller.publicKey,
+) => {
+  const ix = await env.program.methods
+    .cancel()
+    .accountsPartial({
+      caller: caller.publicKey,
+      destination,
+      proposal: env.proposal(id),
+    })
+    .instruction();
+  await sendIxs(env.context, [caller], ix);
 };
 
 export { TOKEN_PROGRAM_ID };

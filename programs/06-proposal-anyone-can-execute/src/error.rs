@@ -16,4 +16,6 @@ pub enum MultisigError {
     AlreadyExecuted,
     #[msg("The accounts passed do not match the stored proposal")]
     AccountMismatch,
+    #[msg("The proposal has expired")]
+    ProposalExpired,
 }

@@ -36,4 +36,8 @@ pub mod open_multisig {
     pub fn execute<'info>(ctx: Context<'_, '_, 'info, 'info, Execute<'info>>) -> Result<()> {
         instructions::execute(ctx)
     }
+
+    pub fn cancel(ctx: Context<Cancel>) -> Result<()> {
+        instructions::cancel(ctx)
+    }
 }

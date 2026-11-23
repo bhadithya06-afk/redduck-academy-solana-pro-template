@@ -6,13 +6,14 @@ use crate::Config;
 #[derive(Accounts)]
 pub struct Deposit<'info> {
     pub depositor: Signer<'info>,
+    /// Anchored to the single program-derived Config PDA root (`seeds = [b"config"]`).
     #[account(seeds = [b"config"], bump = config.bump)]
     pub config: Account<'info, Config>,
     #[account(address = config.mint)]
     pub mint: Account<'info, Mint>,
     #[account(mut, token::mint = mint, token::authority = depositor)]
     pub depositor_tokens: Account<'info, TokenAccount>,
-    #[account(mut, seeds = [b"vault"], bump)]
+    #[account(mut, seeds = [b"vault"], bump, token::mint = mint, token::authority = config)]
     pub vault: Account<'info, TokenAccount>,
     pub token_program: Program<'info, Token>,
 }

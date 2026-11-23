@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-use crate::MAX_KEYS;
+pub const MAX_KEYS: usize = 4;
 
 #[account]
 #[derive(InitSpace)]

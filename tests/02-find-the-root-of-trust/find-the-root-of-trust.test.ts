@@ -1,7 +1,9 @@
+import { createHash } from "crypto";
 import { assert } from "chai";
 import {
   Ed25519Program,
   Keypair,
+  PublicKey,
   SystemProgram,
   TransactionInstruction,
 } from "@solana/web3.js";
@@ -38,6 +40,22 @@ const encodeFakeSysvar = (ix: TransactionInstruction): Buffer => {
   ]);
 };
 
+/** Serializes a forged Anchor Allowlist account owned by the program. */
+const encodeFakeAllowlist = (authority: PublicKey, keys: PublicKey[]): Buffer => {
+  const discriminator = createHash("sha256")
+    .update("account:Allowlist")
+    .digest()
+    .subarray(0, 8);
+  const vecLen = Buffer.alloc(4);
+  vecLen.writeUInt32LE(keys.length, 0);
+  return Buffer.concat([
+    discriminator,
+    authority.toBuffer(),
+    vecLen,
+    ...keys.map((k) => k.toBuffer()),
+  ]);
+};
+
 describe("02-find-the-root-of-trust", () => {
   let env: VaultFixture;
 
@@ -57,7 +75,7 @@ describe("02-find-the-root-of-trust", () => {
     );
   });
 
-  it("rejects a fake instructions sysvar account", async () => {
+  it("rejects the pre-fix exploit using a fake sysvar account and a fake allowlist", async () => {
     const rogue = Keypair.generate();
     const amount = oneToken().muln(100);
     const forgedEd25519Ix = Ed25519Program.createInstructionWithPrivateKey({
@@ -65,6 +83,7 @@ describe("02-find-the-root-of-trust", () => {
       message: withdrawalMessage(env.vault, env.payerTokens, amount),
     });
 
+    // 1. Forged instructions sysvar account containing the attacker's Ed25519 entry
     const fakeSysvar = Keypair.generate();
     env.context.setAccount(fakeSysvar.publicKey, {
       lamports: 1_000_000_000,
@@ -73,6 +92,17 @@ describe("02-find-the-root-of-trust", () => {
       executable: false,
     });
 
+    // 2. Forged allowlist account listing the attacker's public key
+    const fakeAllowlist = Keypair.generate();
+    env.context.setAccount(fakeAllowlist.publicKey, {
+      lamports: 1_000_000_000,
+      data: encodeFakeAllowlist(rogue.publicKey, [rogue.publicKey]),
+      owner: env.program.programId,
+      executable: false,
+    });
+
+    // Before the fix, passing fakeAllowlist and fakeSysvar drained the vault.
+    // After anchoring to the Config PDA and canonical Instructions sysvar, this fails.
     const ix = await env.program.methods
       .withdraw(amount)
       .accountsPartial({
@@ -82,6 +112,13 @@ describe("02-find-the-root-of-trust", () => {
         instructions: fakeSysvar.publicKey,
         tokenProgram: TOKEN_PROGRAM_ID,
       })
+      .remainingAccounts([
+        {
+          pubkey: fakeAllowlist.publicKey,
+          isSigner: false,
+          isWritable: false,
+        },
+      ])
       .instruction();
 
     await expectReverted(

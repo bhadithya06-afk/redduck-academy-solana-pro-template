@@ -26,10 +26,6 @@ pub mod oracle_vault {
         instructions::deposit(ctx, amount)
     }
 
-    pub fn create_allowlist(ctx: Context<CreateAllowlist>, keys: Vec<Pubkey>) -> Result<()> {
-        instructions::create_allowlist(ctx, keys)
-    }
-
     pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
         instructions::withdraw(ctx, amount)
     }

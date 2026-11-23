@@ -48,6 +48,8 @@ pub fn initialize(ctx: Context<Initialize>, params: MarketParams) -> Result<()> 
         max_price_age: params.max_price_age,
         borrow_ltv_bps: params.borrow_ltv_bps,
         liquidation_ltv_bps: params.liquidation_ltv_bps,
+        avg_collateral_price: 0,
+        last_price_time: 0,
         bump: ctx.bumps.market,
     });
     Ok(())

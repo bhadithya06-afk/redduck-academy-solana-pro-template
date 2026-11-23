@@ -1,8 +1,11 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{Mint, Token, TokenAccount};
+use anchor_spl::token::{transfer_checked, Mint, Token, TokenAccount, TransferChecked};
 use pyth_solana_receiver_sdk::price_update::PriceUpdateV2;
 
-use crate::{Market, Position};
+use crate::{
+    pricing::{read_band, value},
+    update_collateral_average, Market, MarketError, Position, BPS,
+};
 
 #[derive(Accounts)]
 pub struct Liquidate<'info> {
@@ -28,6 +31,82 @@ pub struct Liquidate<'info> {
     pub token_program: Program<'info, Token>,
 }
 
-pub fn liquidate(_ctx: Context<Liquidate>) -> Result<()> {
-    todo!()
+pub fn liquidate(ctx: Context<Liquidate>) -> Result<()> {
+    let clock = Clock::get()?;
+    let col_band = read_band(
+        &ctx.accounts.collateral_price,
+        &ctx.accounts.market.collateral_feed,
+        ctx.accounts.market.max_price_age,
+        &clock,
+    )?;
+    let debt_band = read_band(
+        &ctx.accounts.debt_price,
+        &ctx.accounts.market.debt_feed,
+        ctx.accounts.market.max_price_age,
+        &clock,
+    )?;
+
+    let market = &mut ctx.accounts.market;
+    let _ = update_collateral_average(market, col_band.mid, clock.unix_timestamp)?;
+
+    let debt_amount = ctx.accounts.position.debt;
+    let collateral_amount = ctx.accounts.position.collateral;
+    require!(debt_amount > 0, MarketError::NothingToLiquidate);
+
+    // Liquidation uses spot low band for collateral and high band for debt, without borrow-only
+    // spike/LTV rules so liquidations are never blocked by rules protecting new loans.
+    let collateral_val = value(
+        collateral_amount,
+        col_band.low,
+        ctx.accounts.collateral_mint.decimals,
+    )?;
+    let debt_val = value(
+        debt_amount,
+        debt_band.high,
+        ctx.accounts.debt_mint.decimals,
+    )?;
+
+    require!(
+        debt_val
+            .checked_mul(BPS as u128)
+            .ok_or(MarketError::MathOverflow)?
+            > collateral_val
+                .checked_mul(market.liquidation_ltv_bps as u128)
+                .ok_or(MarketError::MathOverflow)?,
+        MarketError::NotLiquidatable
+    );
+
+    // Repay full debt from liquidator to debt_vault
+    transfer_checked(
+        CpiContext::new(
+            ctx.accounts.token_program.to_account_info(),
+            TransferChecked {
+                from: ctx.accounts.liquidator_debt.to_account_info(),
+                mint: ctx.accounts.debt_mint.to_account_info(),
+                to: ctx.accounts.debt_vault.to_account_info(),
+                authority: ctx.accounts.liquidator.to_account_info(),
+            },
+        ),
+        debt_amount,
+        ctx.accounts.debt_mint.decimals,
+    )?;
+
+    ctx.accounts.position.debt = 0;
+    ctx.accounts.position.collateral = 0;
+
+    let seeds: &[&[u8]] = &[b"market", &[market.bump]];
+    transfer_checked(
+        CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            TransferChecked {
+                from: ctx.accounts.collateral_vault.to_account_info(),
+                mint: ctx.accounts.collateral_mint.to_account_info(),
+                to: ctx.accounts.liquidator_collateral.to_account_info(),
+                authority: ctx.accounts.market.to_account_info(),
+            },
+            &[seeds],
+        ),
+        collateral_amount,
+        ctx.accounts.collateral_mint.decimals,
+    )
 }

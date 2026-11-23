@@ -45,9 +45,11 @@ pub fn execute<'info>(ctx: Context<'_, '_, 'info, 'info, Execute<'info>>) -> Res
                 actual.is_writable == stored.is_writable,
                 MultisigError::AccountMismatch
             );
-            if stored.is_signer && actual.key() != vault_key {
-                require!(actual.is_signer, MultisigError::AccountMismatch);
+            // Only the vault PDA can be signed via `invoke_signed`; non-vault signers are rejected.
+            if stored.is_signer {
+                require_keys_eq!(actual.key(), vault_key, MultisigError::AccountMismatch);
             }
+            require!(!actual.is_signer, MultisigError::AccountMismatch);
         }
 
         let target_program_acc = &ctx.remaining_accounts[proposal.metas.len()];
@@ -56,13 +58,14 @@ pub fn execute<'info>(ctx: Context<'_, '_, 'info, 'info, Execute<'info>>) -> Res
             proposal.program_id,
             MultisigError::AccountMismatch
         );
+        require!(!target_program_acc.is_signer, MultisigError::AccountMismatch);
 
         let metas: Vec<AccountMeta> = proposal
             .metas
             .iter()
             .map(|meta| AccountMeta {
                 pubkey: meta.pubkey,
-                is_signer: meta.is_signer,
+                is_signer: meta.is_signer && meta.pubkey == vault_key,
                 is_writable: meta.is_writable,
             })
             .collect();

@@ -3,19 +3,20 @@
 ## Why anyone may execute
 
 Once a proposal has collected `threshold` approvals from distinct valid `Config` members, the decision has already been committed on-chain. Letting any wallet send `execute` removes liveness bottlenecks and admin single-points-of-failure without weakening security:
-- **What the executor can do:** Pay transaction fees and submit the approved `Proposal` once `proposal.approvals >= config.threshold` and `!proposal.executed`.
-- **What the executor cannot change:** The target `program_id`, the stored `metas` (`pubkey` and `is_writable` must match one-for-one), the stored `data`, the `vault` PDA authority, or the approval count. Any altered account list or program fails with `MultisigError::AccountMismatch`.
+- **What the executor can do:** Pay transaction fees and submit the approved `Proposal` once `proposal.approvals >= config.threshold`, `!proposal.executed`, and `now <= proposal.expires_at`.
+- **What the executor cannot change:** The target `program_id`, the stored `metas` (`pubkey` and `is_writable` must match one-for-one, with non-vault signers disallowed), the stored `data`, or the approval count. Any altered account list or program fails with `MultisigError::AccountMismatch`.
 
 ## What the PDA signs
 
-At execution, the program invokes the stored instruction via `invoke_signed` using only the `["vault", &[config.vault_bump]]` PDA seeds.
-- That grants a programmatic signer privilege **solely** for the `vault` PDA—not for any member's wallet, not for any arbitrary PDA, and not for any instruction payload outside `proposal.program_id`, `proposal.metas`, and `proposal.data` stored in the approved `Proposal` account.
+At execution, the program invokes the stored instruction via `invoke_signed` using solely the `["vault", &[config.vault_bump]]` PDA seeds.
+- That provides a programmatic signer only for `vault` when `meta.pubkey == vault`. It does not sign for any other account or external wallet, and `execute` rejects any stored meta marked `is_signer` whose pubkey is not `vault`.
+- Because `program_id`, `metas`, and `data` come from the stored `Proposal` account (not caller-supplied instruction fields), the `vault` PDA cannot sign arbitrary instructions outside the approved proposal.
 
 ## What stays with the members
 
 Creating proposals (`create_proposal`) and approving them (`approve`) still require a valid member keypair in `config.members`:
 - Members define **what** action is proposed and **whether** the multisig consents to it up to `config.threshold`.
-- Once consent is recorded on-chain in the `Proposal` account, execution becomes a mechanical, deterministic step that any caller can trigger.
+- Once consent is recorded on-chain in the `Proposal` account, execution becomes a deterministic step that any caller can trigger.
 
 ## The exits
 

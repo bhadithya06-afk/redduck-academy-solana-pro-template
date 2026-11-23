@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{transfer_checked, Mint, Token, TokenAccount, TransferChecked};
 
-use crate::{Book, BookError, NONE};
+use crate::{Book, BookError, CELLS, NONE};
 
 #[derive(Accounts)]
 pub struct PlaceOrder<'info> {
@@ -17,14 +17,56 @@ pub struct PlaceOrder<'info> {
     pub token_program: Program<'info, Token>,
 }
 
-/// Places an order. `hint` is the cell the new order should go after, or `None` for the head.
-/// The given program ignores the hint and walks the list from the head instead.
+/// Validates a caller-supplied `hint` in O(1) time by checking only the relevant
+/// neighbor cell(s) without scanning the book.
+fn validate_hint(book: &Book, price: u64, hint: Option<u16>) -> Result<u16> {
+    match hint {
+        None => {
+            let head = book.head;
+            if head != NONE {
+                require!((head as usize) < CELLS, BookError::BadHint);
+                let head_cell = book.cells[head as usize];
+                require!(head_cell.alive == 1, BookError::BadHint);
+                require!(price > head_cell.price, BookError::BadHint);
+            }
+            Ok(NONE)
+        }
+        Some(h) => {
+            require!((h as usize) < CELLS, BookError::BadHint);
+            let prev_cell = book.cells[h as usize];
+            require!(prev_cell.alive == 1, BookError::BadHint);
+            require!(prev_cell.price >= price, BookError::BadHint);
+
+            let next = prev_cell.next;
+            if next != NONE {
+                require!((next as usize) < CELLS, BookError::BadHint);
+                let next_cell = book.cells[next as usize];
+                require!(next_cell.alive == 1, BookError::BadHint);
+                require!(price > next_cell.price, BookError::BadHint);
+            }
+            Ok(h)
+        }
+    }
+}
+
+/// Places an order after `hint` (or at the head when `hint` is `None`), checking only
+/// the local neighbor cells and locking `size` tokens in the vault.
 pub fn place_order(
     ctx: Context<PlaceOrder>,
     price: u64,
     size: u64,
-    _hint: Option<u16>,
+    hint: Option<u16>,
 ) -> Result<()> {
+    require!(size > 0, BookError::BadHint);
+
+    let (cell, after) = {
+        let book = ctx.accounts.book.load()?;
+        let free_cell = book.free_head;
+        require!(free_cell != NONE, BookError::BookFull);
+        let validated_after = validate_hint(&book, price, hint)?;
+        (free_cell, validated_after)
+    };
+
     transfer_checked(
         CpiContext::new(
             ctx.accounts.token_program.to_account_info(),
@@ -40,18 +82,8 @@ pub fn place_order(
     )?;
 
     let mut book = ctx.accounts.book.load_mut()?;
-    let cell = book.free_head;
-    require!(cell != NONE, BookError::BookFull);
-    book.free_head = book.cells[cell as usize].next;
-
-    // Walk from the head until the next order is cheaper than the new one. Older orders at the
-    // same price stay in front. This is the O(n) part.
-    let mut after = NONE;
-    let mut cursor = book.head;
-    while cursor != NONE && book.cells[cursor as usize].price >= price {
-        after = cursor;
-        cursor = book.cells[cursor as usize].next;
-    }
+    let next_free = book.cells[cell as usize].next;
+    book.free_head = next_free;
 
     link(
         &mut book,

@@ -2,7 +2,8 @@ use anchor_lang::prelude::*;
 
 use crate::{Config, RewardsError, User};
 
-/// The admin credits a user with a reward. This is where rewards come from; it stays.
+/// The admin credits a user with a reward. This is accounting only—it does not pay out
+/// rewards or set prices, leaving execution (`claim`, `set_price`, `buy`) permissionless.
 #[derive(Accounts)]
 pub struct Accrue<'info> {
     #[account(mut)]

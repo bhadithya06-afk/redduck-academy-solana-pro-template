@@ -3,6 +3,8 @@ use anchor_spl::token::{Mint, Token, TokenAccount};
 
 use crate::Config;
 
+/// Initializes the program configuration (`admin`, `oracle`, `max_price_age`) and vault PDA.
+/// No operator `bot` key is stored or required for execution.
 #[derive(Accounts)]
 pub struct Initialize<'info> {
     #[account(mut)]

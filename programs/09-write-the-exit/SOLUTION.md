@@ -20,7 +20,10 @@
 
 **Would the product make sense without it?** Yes. Once a program is deployed and verified, immutable or timelocked governance is viable and avoids unilateral key risk.
 
-**The exit:** Transfer upgrade authority from the third-party 2-of-3 multisig into a protocol-controlled timelock governance authority with a mandatory **48-hour (`172,800`-second)** upgrade delay triggered whenever a new program binary hash is queued for upgrade, and schedule an explicit freeze/immutability trigger after **7 days (`604,800` seconds)** of stable post-launch operation (or if the third-party operator's SLA/responsiveness fails) so upgradeability is permanently revoked (`set_upgrade_authority` to `None` / immutable).
+**The exit:** Transfer upgrade authority from the third-party 2-of-3 multisig into a protocol-controlled timelock governance authority:
+- **Who triggers it:** Authorized protocol governance signers initiate/queue an upgrade or immutability action (and once the delay or stabilization period elapses, governance signers—or a permissionless/timelocked finalizer after the scheduled freeze timestamp—execute the upgrade or revoke upgrade authority permanently).
+- **Timing and trigger conditions:** Queueing a program upgrade starts a **48-hour (`172,800`-second)** timelock delay before the new bytecode can be deployed; after **7 days (`604,800` seconds)** of stable post-launch operation (or if the third-party multisig operator stalls/loses mandate), governance triggers a permanent freeze revoking the upgrade authority (`None` / immutable).
+- **Trade-off:** A 48-hour timelock slows down urgent bug fixes or emergency patches, and revoking upgrade authority permanently removes the ability to fix future logic bugs via program upgrades.
 
 **If the key were stolen:** Today, a compromised 2-of-3 keyset with no timelock can immediately deploy arbitrary bytecode in a single transaction, seizing vault/user funds or altering rules without warning or exit time.
 

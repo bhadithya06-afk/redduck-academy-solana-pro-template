@@ -1,12 +1,12 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{transfer_checked, Mint, Token, TokenAccount, TransferChecked};
 
-use crate::Config;
+use crate::{Config, VaultError, MAX_KEYS};
 
 #[derive(Accounts)]
 pub struct Deposit<'info> {
     pub depositor: Signer<'info>,
-    /// Anchored to the single program-derived Config PDA root (`seeds = [b"config"]`).
+    /// Single root of trust: derived from canonical `["config"]` PDA seeds, never caller-chosen.
     #[account(seeds = [b"config"], bump = config.bump)]
     pub config: Account<'info, Config>,
     #[account(address = config.mint)]
@@ -19,6 +19,10 @@ pub struct Deposit<'info> {
 }
 
 pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
+    require!(
+        ctx.accounts.config.allowed_keys.len() <= MAX_KEYS,
+        VaultError::TooManyKeys
+    );
     transfer_checked(
         CpiContext::new(
             ctx.accounts.token_program.to_account_info(),

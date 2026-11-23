@@ -159,3 +159,26 @@ describe("02-find-the-root-of-trust", () => {
     );
   });
 });
+
+// Verify deposit also enforces the canonical Config PDA root
+describe("02-find-the-root-of-trust: shared config PDA root across instructions", () => {
+  it("rejects a non-PDA config account in deposit", async () => {
+    const env = await setupVault();
+    const fakeConfig = Keypair.generate();
+    const depositIx = await env.program.methods
+      .deposit(oneToken().muln(10))
+      .accountsPartial({
+        depositor: env.payer.publicKey,
+        config: fakeConfig.publicKey,
+        mint: env.mint,
+        depositorTokens: env.payerTokens,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .instruction();
+
+    await expectReverted(
+      { revertedWith: { message: "AccountNotInitialized" } },
+      sendIxs(env.context, [env.payer], depositIx),
+    );
+  });
+});

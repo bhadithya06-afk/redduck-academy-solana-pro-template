@@ -4,7 +4,7 @@ use anchor_lang::prelude::*;
 #[derive(InitSpace)]
 pub struct Device {
     pub owner: Pubkey,
-    /// The nonce of the last claim. The next claim has to carry nonce + 1.
-    pub nonce: u64,
+    /// Cumulative reward total already paid out to this device (monotonically non-decreasing).
+    pub paid: u64,
     pub bump: u8,
 }

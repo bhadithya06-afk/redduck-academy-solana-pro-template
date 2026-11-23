@@ -24,7 +24,7 @@ pub mod total_claims {
         instructions::register_device(ctx)
     }
 
-    pub fn claim(ctx: Context<Claim>, amount: u64, nonce: u64) -> Result<()> {
-        instructions::claim(ctx, amount, nonce)
+    pub fn claim(ctx: Context<Claim>, total: u64) -> Result<()> {
+        instructions::claim(ctx, total)
     }
 }

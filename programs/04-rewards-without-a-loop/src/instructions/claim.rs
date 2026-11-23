@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{transfer_checked, Mint, Token, TokenAccount, TransferChecked};
 
-use crate::{Pool, Staker};
+use crate::{settle_staker, Pool, Staker};
 
 #[derive(Accounts)]
 pub struct Claim<'info> {
@@ -20,11 +20,17 @@ pub struct Claim<'info> {
 }
 
 pub fn claim(ctx: Context<Claim>) -> Result<()> {
-    let amount = ctx.accounts.staker.pending;
-    ctx.accounts.staker.pending = 0;
+    let pool_rpt = ctx.accounts.pool.reward_per_token;
+    let staker = &mut ctx.accounts.staker;
+    settle_staker(pool_rpt, staker)?;
+
+    let amount = staker.accrued;
+    staker.accrued = 0;
+
     if amount == 0 {
         return Ok(());
     }
+
     let seeds: &[&[u8]] = &[b"pool", &[ctx.accounts.pool.bump]];
     transfer_checked(
         CpiContext::new_with_signer(

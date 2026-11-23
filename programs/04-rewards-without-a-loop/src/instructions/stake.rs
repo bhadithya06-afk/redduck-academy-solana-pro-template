@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{transfer_checked, Mint, Token, TokenAccount, TransferChecked};
 
-use crate::{Pool, PoolError, Staker};
+use crate::{settle_staker, Pool, PoolError, Staker};
 
 #[derive(Accounts)]
 pub struct Stake<'info> {
@@ -41,17 +41,25 @@ pub fn stake(ctx: Context<Stake>, amount: u64) -> Result<()> {
         amount,
         ctx.accounts.mint.decimals,
     )?;
+
+    let pool_rpt = ctx.accounts.pool.reward_per_token;
     let staker = &mut ctx.accounts.staker;
     staker.owner = ctx.accounts.owner.key();
     staker.bump = ctx.bumps.staker;
+
+    // Settle rewards owed on the existing stake BEFORE mutating `staker.stake`.
+    settle_staker(pool_rpt, staker)?;
+
     staker.stake = staker
         .stake
         .checked_add(amount)
         .ok_or(PoolError::MathOverflow)?;
+
     let pool = &mut ctx.accounts.pool;
     pool.total_staked = pool
         .total_staked
         .checked_add(amount)
         .ok_or(PoolError::MathOverflow)?;
+
     Ok(())
 }

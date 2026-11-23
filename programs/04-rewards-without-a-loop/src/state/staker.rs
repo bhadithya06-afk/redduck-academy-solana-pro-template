@@ -5,7 +5,9 @@ use anchor_lang::prelude::*;
 pub struct Staker {
     pub owner: Pubkey,
     pub stake: u64,
-    /// Rewards credited by `add_rewards` and not yet claimed.
-    pub pending: u64,
+    /// Snapshot of `pool.reward_per_token` at the staker's last settlement.
+    pub reward_debt: u128,
+    /// Rewards settled up to `reward_debt` and awaiting transfer on `claim`.
+    pub accrued: u64,
     pub bump: u8,
 }

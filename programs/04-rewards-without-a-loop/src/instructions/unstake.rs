@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{transfer_checked, Mint, Token, TokenAccount, TransferChecked};
 
-use crate::{Pool, PoolError, Staker};
+use crate::{settle_staker, Pool, PoolError, Staker};
 
 #[derive(Accounts)]
 pub struct Unstake<'info> {
@@ -20,14 +20,24 @@ pub struct Unstake<'info> {
 }
 
 pub fn unstake(ctx: Context<Unstake>, amount: u64) -> Result<()> {
+    let pool_rpt = ctx.accounts.pool.reward_per_token;
     let staker = &mut ctx.accounts.staker;
     require!(staker.stake >= amount, PoolError::InsufficientStake);
-    staker.stake -= amount;
+
+    // Settle rewards owed on the existing stake BEFORE reducing `staker.stake`.
+    settle_staker(pool_rpt, staker)?;
+
+    staker.stake = staker
+        .stake
+        .checked_sub(amount)
+        .ok_or(PoolError::MathOverflow)?;
+
     let pool = &mut ctx.accounts.pool;
     pool.total_staked = pool
         .total_staked
         .checked_sub(amount)
         .ok_or(PoolError::MathOverflow)?;
+
     let seeds: &[&[u8]] = &[b"pool", &[pool.bump]];
     transfer_checked(
         CpiContext::new_with_signer(

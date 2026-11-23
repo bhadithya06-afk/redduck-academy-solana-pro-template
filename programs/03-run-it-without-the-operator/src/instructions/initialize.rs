@@ -25,13 +25,11 @@ pub struct Initialize<'info> {
 
 pub fn initialize(
     ctx: Context<Initialize>,
-    bot: Pubkey,
     oracle: Pubkey,
     max_price_age: i64,
 ) -> Result<()> {
     ctx.accounts.config.set_inner(Config {
         admin: ctx.accounts.admin.key(),
-        bot,
         oracle,
         mint: ctx.accounts.mint.key(),
         price: 0,

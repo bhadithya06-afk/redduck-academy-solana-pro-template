@@ -12,4 +12,10 @@ pub enum RewardsError {
     NotEd25519,
     #[msg("The Ed25519 instruction has an unexpected layout")]
     MalformedEd25519,
+    #[msg("The instructions account is not the canonical instructions sysvar")]
+    InvalidInstructionsSysvar,
+    #[msg("The signed price message is not signed by the configured oracle")]
+    InvalidOracle,
+    #[msg("The signed price payload is malformed or invalid")]
+    InvalidPricePayload,
 }

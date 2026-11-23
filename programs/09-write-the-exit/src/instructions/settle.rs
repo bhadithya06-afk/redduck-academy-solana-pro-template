@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{transfer_checked, Mint, Token, TokenAccount, TransferChecked};
 
-use crate::{Config, Entry, Round, RoundError};
+use crate::{Config, Entry, Round, RoundError, REFUND_DELAY_SECONDS};
 
 #[derive(Accounts)]
 pub struct Settle<'info> {
@@ -22,13 +22,24 @@ pub struct Settle<'info> {
 }
 
 pub fn settle(ctx: Context<Settle>) -> Result<()> {
+    let now = Clock::get()?.unix_timestamp;
+    let refund_opens_at = ctx
+        .accounts
+        .round
+        .deadline
+        .checked_add(REFUND_DELAY_SECONDS)
+        .ok_or(RoundError::MathOverflow)?;
+
     let round = &mut ctx.accounts.round;
     require!(!round.settled, RoundError::AlreadySettled);
-    require!(
-        Clock::get()?.unix_timestamp >= round.deadline,
-        RoundError::RoundNotEnded
-    );
+    require!(now >= round.deadline, RoundError::RoundNotEnded);
+    // Disallow settlement once the refund window opens so `settle` and `refund` cannot overlap.
+    require!(now < refund_opens_at, RoundError::RefundWindowOpen);
+
+    let payout = round.pot;
     round.settled = true;
+    round.pot = 0;
+
     let seeds: &[&[u8]] = &[b"config", &[ctx.accounts.config.bump]];
     transfer_checked(
         CpiContext::new_with_signer(
@@ -41,7 +52,7 @@ pub fn settle(ctx: Context<Settle>) -> Result<()> {
             },
             &[seeds],
         ),
-        round.pot,
+        payout,
         ctx.accounts.mint.decimals,
     )
 }

@@ -14,6 +14,8 @@ pub enum RoundError {
     SlippageExceeded,
     #[msg("Refund grace window has not elapsed yet")]
     RefundTooEarly,
+    #[msg("The refund window has opened; round can no longer be settled")]
+    RefundWindowOpen,
     #[msg("No stake remaining to refund")]
     NothingToRefund,
     #[msg("Swap venue change delay has not elapsed yet")]

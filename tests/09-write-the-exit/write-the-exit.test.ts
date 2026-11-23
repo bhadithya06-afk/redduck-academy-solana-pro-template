@@ -2,7 +2,14 @@ import { assert } from "chai";
 import { Clock } from "solana-bankrun";
 import { Keypair } from "@solana/web3.js";
 
-import { expectReverted, getTime, oneToken, timeTravel, tokenBalance } from "../helpers";
+import {
+  expectReverted,
+  getTime,
+  oneToken,
+  sendIxs,
+  timeTravel,
+  tokenBalance,
+} from "../helpers";
 import { RoundFixture, setupRounds } from "./fixture";
 import { join, openRound, settle } from "./actions";
 
@@ -30,7 +37,7 @@ describe("09-write-the-exit", () => {
     assert.isTrue(round.settled);
   });
 
-  it("refunds player stake when rollup never settles and enforces timelock on DEX change", async () => {
+  it("refunds player stake once without settlement after window opens, rejects repeat refund, and enforces DEX timelock", async () => {
     const [alice] = env.players;
     const deadline = (await getTime(env.context)) + 60n;
     await openRound(env, 2, deadline);
@@ -52,15 +59,11 @@ describe("09-write-the-exit", () => {
       .instruction();
     await expectReverted(
       { revertedWith: { message: "RefundTooEarly" } },
-      (async () => {
-        const { sendIxs } = await import("../helpers");
-        await sendIxs(env.context, [alice.keypair], refundIxEarly);
-      })(),
+      sendIxs(env.context, [alice.keypair], refundIxEarly),
     );
 
     // Advance past 300s grace window: player recovers stake without executor
     await timeTravel(env.context, deadline + 301n);
-    const { sendIxs } = await import("../helpers");
     const refundIxOk = await env.program.methods
       .refund()
       .accountsPartial({
@@ -77,6 +80,22 @@ describe("09-write-the-exit", () => {
     assert.equal(
       (afterRefund - beforeRefund).toString(),
       oneToken().muln(75).toString(),
+    );
+
+    // A second refund attempt for the same entry fails with NothingToRefund
+    const refundIxRepeat = await env.program.methods
+      .refund()
+      .accountsPartial({
+        player: alice.keypair.publicKey,
+        round: env.round(2),
+        entry: env.entry(env.round(2), alice.keypair.publicKey),
+        mint: env.mint,
+        playerTokens: alice.tokens,
+      })
+      .instruction();
+    await expectReverted(
+      { revertedWith: { message: "NothingToRefund" } },
+      sendIxs(env.context, [alice.keypair], refundIxRepeat),
     );
 
     // Propose replacement DEX venue and verify immediate apply is refused before 86400s delay

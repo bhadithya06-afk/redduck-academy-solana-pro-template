@@ -49,4 +49,24 @@ describe("07-claims-in-any-order", () => {
     assert.equal(balanceAfterB.toString(), balanceAfterA.toString());
     assert.equal(deviceAfterB.paid.toString(), deviceAfterA.paid.toString());
   });
+
+  it("pays only once when the same claim is repeated multiple times", async () => {
+    const targetTotal = oneToken().muln(15);
+    const smallerTotal = oneToken().muln(5);
+
+    // First claim pays 15; second and third identical claims pay 0
+    await claim(env, targetTotal);
+    await claim(env, targetTotal);
+    await claim(env, targetTotal);
+
+    // Repeating an older/smaller total also pays 0 and leaves `paid` at 15
+    await claim(env, smallerTotal);
+    await claim(env, smallerTotal);
+
+    const finalBalance = await tokenBalance(env.context, env.ownerTokens);
+    const finalDevice = await env.program.account.device.fetch(env.device);
+
+    assert.equal(finalBalance.toString(), targetTotal.toString());
+    assert.equal(finalDevice.paid.toString(), targetTotal.toString());
+  });
 });

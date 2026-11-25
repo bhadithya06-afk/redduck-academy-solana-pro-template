@@ -4,7 +4,7 @@ use anchor_lang::solana_program::instruction::Instruction;
 
 use crate::ClaimError;
 
-/// What an Ed25519 instruction verified: the key that signed and the message.
+/// Verified signer public key and message bytes extracted from an Ed25519 program instruction.
 pub struct Ed25519Signed {
     pub pubkey: Pubkey,
     pub message: Vec<u8>,
